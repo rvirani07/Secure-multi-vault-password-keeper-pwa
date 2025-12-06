@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<title>Secure Multi-Vault Password Keeper</title>
+
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-512x512.png"> 
+
+<style>
+  :root{
+    --bg:#f5f7fb;
+    --panel:#ffffff;
+    --muted:#6b7280;
+    --text:#0f172a;
+    --accent:#0b99a5;    /* primary (unlock) */
+    --accent-2:#2563eb;  /* secondary (create) */
+    --danger:#dc2626;
+    --success:#16a34a;
+    --warn:#f59e0b;
+    --soft-border:rgba(15,23,42,0.06);
+    --radius:12px;
+  }
+  html,body{height:100%; margin:0; font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial; color:var(--text);}
+  body {
+    background: linear-gradient(180deg,var(--bg) 0%, #eef2ff 60%);
+    padding:18px; display:flex; justify-content:center;
+  }
+  .app {
+    width:100%; max-width:1200px;
+  }
+
+  header { display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap: wrap; }
+  header h1 { margin:0; font-size:20px; color:var(--accent-2); }
+  .subtitle { color:var(--muted); font-size:13px; margin-top:3px; }
+
+  .card {
+    background:var(--panel);
+    border-radius:var(--radius);
+    box-shadow:0 8px 28px rgba(15,23,42,0.06);
+    border:1px solid var(--soft-border);
+    padding:14px;
+    margin-bottom:12px;
+  }
+
+  label{ display:block; font-weight:600; margin-top:8px; color:var(--text); font-size:13px; }
+  input, select, textarea, button {
+    font-size:14px; padding:10px; margin-top:6px; width:100%; box-sizing:border-box;
+    border-radius:10px; border:1px solid rgba(0,0,0,0.06); background:#fff; color:var(--text);
+  }
+  textarea{ min-height:96px; resize:vertical; }
+
+  /* --- FLEXBOX FIX FOR PC --- */
+  .row { display:flex; gap:10px; align-items:center; }
+  .row > * { flex:1; } 
+  /* Prevent buttons and selects from expanding excessively */
+  .row > button, .row > .small { flex: 0 0 auto; width: auto; } 
+  .row > select { flex: 0 0 auto; width: auto; min-width: 140px; }
+
+  .small { padding:8px 12px; border-radius:10px; cursor:pointer; }
+  .primary { background:linear-gradient(180deg,var(--accent) 0%, #0891b2 100%); color:white; border:none; }
+  .secondary { background:transparent; color:var(--accent-2); border:1px solid rgba(37,99,235,0.08); }
+  .muted { color:var(--muted); font-size:13px; }
+
+  .chip { padding:6px 10px; border-radius:999px; background:transparent; color: var(--muted); border:1px solid rgba(15,23,42,0.04); font-size:13px; white-space: nowrap; }
+  .hint { color:var(--muted); font-size:13px; margin-top:6px; }
+
+  /* Table styling */
+  table{ width:100%; border-collapse:collapse; margin-top:10px; table-layout: fixed; }
+  th, td{ padding:10px; border-bottom:1px solid rgba(15,23,42,0.04); text-align:left; vertical-align:middle; font-size:14px; word-break: break-word; }
+  th{ color:var(--muted); font-weight:600; font-size:13px; }
+
+  .smallIcon { display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:8px; cursor:pointer; border:1px solid rgba(15,23,42,0.04); background:transparent; flex: 0 0 auto; }
+  .smallIcon:active{ transform:translateY(1px); }
+  .icon-danger{ color:var(--danger); }
+
+  /* toast/undo */
+  .toast {
+    position:fixed; right:18px; bottom:18px; background:#111827; color:#fff; padding:12px 14px;
+    border-radius:10px; box-shadow:0 8px 30px rgba(2,6,23,0.6); display:flex; gap:8px; align-items:center; z-index:3000;
+  }
+  .toast button{ background:#f3f4f6; border:none; padding:6px 10px; border-radius:8px; cursor:pointer; width: auto; }
+
+  /* modal */
+  .modal-backdrop{ position:fixed; inset:0; background:rgba(2,6,23,0.45); display:none; align-items:center; justify-content:center; z-index:4000; }
+  .modal{ width:420px; max-width:92%; background:var(--panel); border-radius:12px; padding:18px; box-shadow:0 20px 60px rgba(2,6,23,0.4); border:1px solid rgba(0,0,0,0.06); }
+  .modal h3{ margin:0 0 8px 0; }
+  .modal .row { margin-top:10px; }
+
+  /* password strength */
+  .strength-wrap{ display:flex; align-items:center; gap:10px; margin-top:6px; flex: 0 0 auto; }
+  .strength-bar{ height:8px; width:100px; background:#eef2ff; border-radius:6px; overflow:hidden; }
+  .strength-fill{ height:100%; width:0%; background:var(--warn); transition:width .18s; }
+  .strength-text{ font-size:12px; color:var(--muted); min-width:60px; }
+
+  /* =========================================
+     MOBILE / RESPONSIVE OPTIMIZATIONS (Card View)
+     ========================================= */
+  @media (max-width:920px){
+    body { padding: 10px; }
+    
+    /* Stack rows vertically on mobile */
+    .row{ flex-direction:column; align-items: stretch; gap: 8px; }
+    .row > button, .row > .small, .row > select { width: 100%; }
+    
+    /* Header adjustments */
+    header { flex-direction: column; align-items: flex-start; }
+    .chip { width: fit-content; }
+
+    /* Modal adjustments */
+    .modal{ width:92%; padding:16px; }
+
+    /* --- TABLE TO CARD TRANSFORMATION (Mobile Only) --- */
+    thead { display: none; }
+    table, tbody, tr, td { display: block; width: 100%; }
+    
+    /* Card style for each row */
+    tr {
+      background: #fff;
+      border: 1px solid var(--soft-border);
+      border-radius: 10px;
+      margin-bottom: 12px;
+      padding: 12px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+    }
+    
+    /* Cells behave like rows inside the card */
+    td {
+      padding: 6px 0;
+      text-align: right;
+      border-bottom: 1px solid #f1f5f9;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      min-height: 24px;
+    }
+    td:last-child { border-bottom: none; padding-top: 12px; justify-content: flex-end; }
+    
+    /* Add labels via CSS */
+    td:nth-of-type(1):before { content: "Site"; font-weight: 600; color: var(--muted); }
+    td:nth-of-type(2):before { content: "Username"; font-weight: 600; color: var(--muted); }
+    td:nth-of-type(3):before { content: "Password"; font-weight: 600; color: var(--muted); }
+    td:nth-of-type(4):before { content: "Tags"; font-weight: 600; color: var(--muted); }
+    td:nth-of-type(5):before { content: "Updated"; font-weight: 600; color: var(--muted); }
+    
+    /* Specific styling for Site Name */
+    td:nth-of-type(1) { font-weight: bold; color: var(--accent-2); font-size: 16px; text-align: left; display: block; }
+    td:nth-of-type(1):before { display: none; } 
+    
+    /* Fix action buttons alignment on mobile */
+    td:nth-of-type(6) > div { width: 100%; justify-content: flex-end; }
+  }
+
+  footer { text-align:center; margin-top:10px; color:var(--muted); font-size:13px; }
+
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div style="flex:1;">
+      <h1>Secure Multi-Vault Password Keeper</h1>
+      <div class="subtitle">Local encrypted vaults • single auto-export per vault • imports & merges</div>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <div class="chip" id="inactivityChip">Unlocked: No</div>
+      <div class="chip" id="lastExportChip">No export</div>
+    </div>
+  </header>
+
+  <div class="card" id="authCard">
+    <div class="row">
+      <div style="flex:1">
+        <label>Existing vaults</label>
+        <select id="vaultSelect" style="width:100%"><option value="">-- choose vault --</option></select>
+      </div>
+      <div style="flex:1; min-width:160px;">
+        <label style="visibility:hidden">placeholder</label>
+        <div id="lastExportInfo" class="chip" style="width:100%; box-sizing:border-box; text-align:center;">No vault selected</div>
+      </div>
+    </div>
+
+    <label>Master password</label>
+    <input id="masterInput" type="password" placeholder="Enter or create master password" autocomplete="new-password"/>
+
+    <label>KDF</label>
+    <select id="kdfSelect" style="width:100%"><option value="argon2">Argon2id (recommended)</option><option value="pbkdf2">PBKDF2-SHA256</option></select>
+
+    <div class="row" style="margin-top:10px;">
+      <button id="unlockBtn" class="small primary">Unlock Vault</button>
+      <button id="openCreateBtn" class="small secondary">Create Vault</button>
+      <button id="openImportBtn" class="small">Import (paste/file)</button>
+    </div>
+
+    <div id="importAreaWrap" style="display:none; margin-top:12px;">
+      <label>Paste encrypted vault (base64 blob) or choose file</label>
+      <textarea id="importPaste" placeholder="Paste encrypted string here"></textarea>
+      <div class="row">
+        <button id="importPasteBtn" class="small primary">Import from Paste</button>
+        <button id="importFileBtn" class="small secondary">Import .vault File</button>
+        <input id="importFileInput" type="file" accept=".vault,text/*" style="display:none"/>
+      </div>
+      <div class="hint">Import merges by entry id (newer updatedAt wins). Use the modal to supply passwords for imported/local vaults when needed.</div>
+    </div>
+
+    <div id="authMsg" class="hint" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="card" id="vaultControls" style="display:none;">
+    <div class="row" style="align-items:center;">
+      <div class="muted" style="flex:1">Vault: <strong id="currentVaultLabel"></strong> — <span id="vaultCount">0</span> entries</div>
+      <div style="margin-left:auto; display:flex; gap:8px;">
+        <button id="downloadBtn" class="small secondary">Download Latest Export</button>
+        <button id="copyExportBtn" class="small">Copy Encrypted Export</button>
+        <button id="lockBtn" class="small" style="border:1px solid rgba(0,0,0,0.06)">Lock</button>
+      </div>
+    </div>
+    <div class="hint" style="margin-top:8px;">Auto-export overwrites the vault's single encrypted export and updates export timestamp.</div>
+  </div>
+
+  <div class="card" id="entryCard" style="display:none;">
+    <div class="row" style="align-items:center;">
+      <label style="flex:1">New / Edit Entry</label>
+      <div style="flex:1">
+        <label>Tag(s)</label>
+        <input id="tags" placeholder="e.g. email,work" style="margin-top:0" />
+      </div>
+    </div>
+
+    <input id="site" placeholder="Site / description (e.g. Gmail)" />
+    <input id="username" placeholder="Username / email" />
+    <div class="row" style="align-items:center;">
+      <input id="entryPassword" placeholder="Password" />
+      <button id="genBtn" class="small">Generate</button>
+      <div id="pwStrength" class="strength-wrap" style="display:none;">
+        <div class="strength-bar"><div id="pwFill" class="strength-fill"></div></div>
+        <div id="pwText" class="strength-text">—</div>
+      </div>
+    </div>
+    <textarea id="notes" placeholder="Notes (optional)"></textarea>
+
+    <div class="row" style="margin-top:8px;">
+      <button id="saveEntryBtn" class="small primary">Save Entry</button>
+      <button id="newEntryBtn" class="small secondary">New Blank</button>
+    </div>
+    <div id="entryMsg" class="hint" style="margin-top:6px"></div>
+  </div>
+
+  <div class="card" id="listCard" style="display:none;">
+    <div class="row" style="align-items:center;">
+      <div style="flex:0 0 auto"><label>Search</label></div>
+      <input id="searchInput" placeholder="Search site, username, notes or tags" />
+      <select id="sortSelect" style="width:auto; flex: 0 0 auto;">
+        <option value="newest">Sort: Newest</option>
+        <option value="oldest">Sort: Oldest</option>
+        <option value="site_asc">Site A→Z</option>
+        <option value="site_desc">Site Z→A</option>
+      </select>
+    </div>
+
+    <table id="entriesTable" aria-live="polite">
+      <thead><tr><th>Site</th><th>Username</th><th>Password</th><th>Tags</th><th>Updated</th><th>Actions</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <footer>Secure Multi-Vault Password Keeper V22 © RV 2025</footer>
+</div>
+
+<div id="modal" class="modal-backdrop" role="dialog" aria-modal="true">
+  <div class="modal" id="modalInner">
+    <h3 id="modalTitle">Modal</h3>
+    <div id="modalBody"></div>
+    <div class="row" style="margin-top:12px;">
+      <button id="modalCancel" class="small secondary">Cancel</button>
+      <button id="modalOk" class="small primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastHost" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/argon2-browser/dist/argon2.min.js"></script>
+
+<script>
+/* ============================
+   Full app logic (Ensuring all previous functionality is intact)
+   ============================ */
+
+const INACTIVITY_SECONDS = 30;
+
+let vault = [];                 // in-memory entries
+let currentVaultName = null;
+let currentMaster = null;
+let currentKdf = 'argon2';
+let unlocked = false;
+
+let inactivityTimer = null;
+let inactivityRemaining = 0;
+let inactivityInterval = null;
+
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modalTitle');
+const modalBody = document.getElementById('modalBody');
+const modalOk = document.getElementById('modalOk');
+const modalCancel = document.getElementById('modalCancel');
+const toastHost = document.getElementById('toastHost');
+
+function el(id){ return document.getElementById(id); }
+function showMsg(text, timeout=5000){ el('entryMsg').textContent = text; if(timeout) setTimeout(()=>{ if(el('entryMsg').textContent===text) el('entryMsg').textContent=''; }, timeout); }
+function showAuthMsg(text, timeout=5000){ el('authMsg').textContent = text; if(timeout) setTimeout(()=>{ if(el('authMsg').textContent===text) el('authMsg').textContent=''; }, timeout); }
+function showLastExport(text){ el('lastExportInfo').textContent = text; el('lastExportChip').textContent = text; }
+function escapeHtml(s){ if(!s) return ''; return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
+function formatNice(iso){ try{ return new Date(iso).toLocaleString(); } catch(e){ return iso; } } 
+function formatTsFile(d){ const pad=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`; }
+
+/* ---------- crypto helpers ---------- */
+function strToBuf(s){ return new TextEncoder().encode(s); }
+function bufToStr(b){ return new TextDecoder().decode(b); }
+function toBase64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function fromBase64(s){ const bin=atob(s); const arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i); return arr.buffer; }
+function randBytes(n){ return crypto.getRandomValues(new Uint8Array(n)); }
+
+async function deriveKeyArgon2(password, salt, opts={time:2, mem: 1<<12, hashLen:32}){
+  const res = await argon2.hash({ pass: password, salt: new Uint8Array(salt), time: opts.time, mem: opts.mem, hashLen: opts.hashLen, parallelism:1, type: argon2.ArgonType.Argon2id, raw:true });
+  const raw = res.hash instanceof Uint8Array ? res.hash : new Uint8Array(res.hash);
+  return crypto.subtle.importKey('raw', raw.buffer, { name: 'AES-GCM' }, false, ['encrypt','decrypt']);
+}
+async function deriveKeyPBKDF2(password, salt, iterations=300000){
+  const pwKey = await crypto.subtle.importKey('raw', strToBuf(password), { name:'PBKDF2' }, false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name:'PBKDF2', salt, iterations, hash:'SHA-256' }, pwKey, { name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+}
+async function deriveKey(password, salt){
+  if(currentKdf === 'argon2' && typeof argon2 !== 'undefined'){
+    try { return await deriveKeyArgon2(password, salt); } catch(e){ console.warn('argon2 failed', e); }
+  }
+  return deriveKeyPBKDF2(password, salt);
+}
+
+async function encryptVault(master, obj){
+  if(!master) throw new Error('Missing master');
+  const salt = randBytes(16);
+  const iv = randBytes(12);
+  const key = await deriveKey(master, salt.buffer);
+  const pt = strToBuf(JSON.stringify(obj));
+  const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, pt);
+  const payload = { salt: toBase64(salt.buffer), iv: toBase64(iv.buffer), ct: toBase64(ct), kdf: currentKdf };
+  return btoa(JSON.stringify(payload));
+}
+
+async function decryptVault(master, exportedString){
+  try {
+    const parsed = JSON.parse(atob(exportedString));
+    const salt = fromBase64(parsed.salt);
+    const iv = fromBase64(parsed.iv);
+    const ct = fromBase64(parsed.ct);
+    const saved = currentKdf;
+    currentKdf = parsed.kdf || 'pbkdf2';
+    const key = await deriveKey(master, salt);
+    const ptBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv: new Uint8Array(iv) }, key, ct);
+    currentKdf = saved;
+    return JSON.parse(bufToStr(ptBuf));
+  } catch(e){
+    throw new Error('Decryption failed');
+  }
+}
+
+/* ---------- storage helpers ---------- */
+function vaultKey(name){ return (name ?? '').trim(); }
+function exportKey(name){ return (name ?? '').trim() + '_export'; }
+function exportAtKey(name){ return (name ?? '').trim() + '_exportAt'; }
+
+function listVaults(){
+  const sel = el('vaultSelect');
+  sel.innerHTML = '<option value="">-- choose vault --</option>';
+  for(let i=0;i<localStorage.length;i++){
+    const k = localStorage.key(i);
+    if(!k) continue;
+    if(k.endsWith('_export') || k.endsWith('_exportAt')) continue;
+    if(k.trim().length===0) continue;
+    const o = document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o);
+  }
+  updateLastExportInfo();
+}
+
+function saveEncryptedToStorage(name, encryptedStr){
+  if(!name || name.trim().length===0) throw new Error('Invalid vault name');
+  localStorage.setItem(vaultKey(name), encryptedStr);
+  localStorage.setItem(exportKey(name), encryptedStr);
+  localStorage.setItem(exportAtKey(name), new Date().toISOString());
+  updateLastExportInfo();
+}
+function loadEncryptedFromStorage(name){ if(!name) return null; return localStorage.getItem(vaultKey(name)); }
+function loadLatestExport(name){ if(!name) return null; return localStorage.getItem(exportKey(name)); }
+function getLastExportAt(name){ if(!name) return null; return localStorage.getItem(exportAtKey(name)); }
+function removeVaultFromStorage(name){ if(!name) return; localStorage.removeItem(vaultKey(name)); localStorage.removeItem(exportKey(name)); localStorage.removeItem(exportAtKey(name)); }
+
+/* ---------- UI helpers ---------- */
+function updateLastExportInfo(){
+  const name = el('vaultSelect').value;
+  if(!name){ showLastExport('No vault selected'); return; }
+  const t = getLastExportAt(name);
+  showLastExport(t ? 'Last export: '+formatNice(t) : 'No export yet');
+}
+
+function updateUI(){
+  el('vaultCount').textContent = vault.length;
+  el('currentVaultLabel').textContent = currentVaultName || '';
+  updateLastExportInfo();
+  renderEntries();
+}
+
+/* ---------- render entries ---------- */
+function renderEntries(){
+  const tbody = document.querySelector('#entriesTable tbody');
+  tbody.innerHTML = '';
+  const q = el('searchInput').value.trim().toLowerCase();
+  let list = vault.slice();
+  if(q) list = list.filter(e => (e.site||'').toLowerCase().includes(q) || (e.username||'').toLowerCase().includes(q) || (e.tags||'').toLowerCase().includes(q));
+  const sort = el('sortSelect').value;
+  if(sort==='newest') list.sort((a,b)=> new Date(b.updatedAt)-new Date(a.updatedAt));
+  else if(sort==='oldest') list.sort((a,b)=> new Date(a.updatedAt)-new Date(b.updatedAt));
+  else if(sort==='site_asc') list.sort((a,b)=> (a.site||'').localeCompare(b.site||''));
+  else if(sort==='site_desc') list.sort((a,b)=> (b.site||'').localeCompare(a.site||''));
+
+  for(const entry of list){
+    const tr = document.createElement('tr');
+    tr.dataset.id = entry.id;
+    tr.innerHTML = `
+      <td style="min-width:140px">${escapeHtml(entry.site)}</td>
+      <td style="min-width:160px">${escapeHtml(entry.username)}</td>
+      <td><button class="smallIcon showPwd" title="Show/hide password">👁</button> <span class="pwdSpan muted">••••••</span></td>
+      <td>${escapeHtml(entry.tags||'')}</td>
+      <td><div class="muted">${entry.updatedAt?formatNice(entry.updatedAt):''}</div></td>
+      <td>
+        <div style="display:flex; gap:6px;">
+          <button class="smallIcon editBtn" title="Edit">✏️</button>
+          <button class="smallIcon copyBtn" title="Copy">📋</button>
+          <button class="smallIcon delBtn" title="Delete">🗑️</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  // attach events
+  Array.from(document.querySelectorAll('.showPwd')).forEach(btn => {
+    btn.onclick = (e) => {
+      const tr = e.target.closest('tr'); const id = tr.dataset.id;
+      const entry = vault.find(x=>x.id===id);
+      const span = tr.querySelector('.pwdSpan');
+      if(!entry) return;
+      if(span.textContent === '••••••'){ span.textContent = entry.password; btn.textContent = '🙈'; }
+      else { span.textContent = '••••••'; btn.textContent = '👁'; }
+    };
+  });
+
+  Array.from(document.querySelectorAll('.editBtn')).forEach(btn => {
+    btn.onclick = (e) => {
+      const tr = e.target.closest('tr'); const id = tr.dataset.id;
+      const entry = vault.find(x=>x.id===id);
+      if(!entry) return;
+      el('site').value = entry.site;
+      el('username').value = entry.username;
+      el('entryPassword').value = entry.password;
+      el('notes').value = entry.notes||'';
+      el('tags').value = entry.tags||'';
+      el('saveEntryBtn').dataset.editId = id;
+      evaluatePwStrength(entry.password);
+      window.scrollTo({top:0, behavior:'smooth'});
+    };
+  });
+
+  // COPY FUNCTIONALITY (Last provided, best effort)
+  Array.from(document.querySelectorAll('.copyBtn')).forEach(btn => {
+    btn.onclick = async (e) => {
+      const tr = e.target.closest('tr'); const id = tr.dataset.id;
+      const entry = vault.find(x=>x.id===id);
+      if(!entry) return showMsg('Entry not found');
+      
+      const password = entry.password;
+
+      try {
+        // 1. Try modern, mobile-friendly asynchronous API
+        if(navigator.clipboard && navigator.clipboard.writeText){ 
+          await navigator.clipboard.writeText(password); 
+          showMsg('Password copied');
+          return;
+        }
+        
+        // 2. Fallback using execCommand (less reliable on mobile, but necessary for desktop fallback)
+        if (document.execCommand) {
+             const ta = document.createElement('textarea'); 
+             ta.value = password; 
+             ta.style.position='fixed'; // Ensures it's off-screen but readable
+             ta.style.left='-9999px';
+             document.body.appendChild(ta); 
+             ta.select(); 
+             const successful = document.execCommand('copy'); 
+             document.body.removeChild(ta);
+             
+             if (successful) {
+                 showMsg('Password copied (via fallback)');
+                 return;
+             }
+        }
+        
+        // If all else fails
+        showMsg('Copy failed: Manual selection required.');
+      } catch(err){ 
+        console.error('Copy failed:', err);
+        showMsg('Copy failed due to browser restriction.'); 
+      }
+    };
+  });
+
+  Array.from(document.querySelectorAll('.delBtn')).forEach(btn => {
+    btn.onclick = async (e) => {
+      const tr = e.target.closest('tr'); const id = tr.dataset.id;
+      const entry = vault.find(x=>x.id===id);
+      if(!entry) return;
+      const confirmed = await showConfirmModal('Delete entry', `Delete entry "${entry.site}"? This shows an alert-like confirm. You can undo for 5s after deleting.`);
+      if(!confirmed) return;
+      const idx = vault.findIndex(x=>x.id===id);
+      if(idx<0) return;
+      const removed = vault.splice(idx,1)[0];
+      await persistVault();
+      updateUI();
+      showUndoToast('Entry deleted', async ()=>{ vault.splice(idx,0,removed); await persistVault(); updateUI(); }, 5000);
+    };
+  });
+}
+
+/* ---------- persist & auto-export ---------- */
+async function persistVault(){
+  if(!currentVaultName || !currentMaster) throw new Error('No unlocked vault');
+  vault = vault.map(e => ({ ...e, createdAt: e.createdAt || new Date().toISOString(), updatedAt: e.updatedAt || e.createdAt || new Date().toISOString() }));
+  const enc = await encryptVault(currentMaster, vault);
+  saveEncryptedToStorage(currentVaultName, enc);
+}
+
+/* ---------- create / unlock / lock ---------- */
+el('openCreateBtn').onclick = () => {
+  showModal('Create vault', createVaultModal());
+};
+async function createVaultModal(){
+  return new Promise(resolve => {
+    modalTitle.textContent = 'Create new vault';
+    modalBody.innerHTML = `
+      <label>Vault name</label>
+      <input id="m_vaultName" placeholder="e.g. Personal"/>
+      <label>Master password</label>
+      <input id="m_vaultPass" type="password" placeholder="Choose a strong password" />
+      <div class="hint" style="margin-top:8px">Vault name cannot be overwritten. Choose a unique name.</div>
+    `;
+    modalOk.onclick = () => {
+      const name = el('m_vaultName').value.trim();
+      const pass = el('m_vaultPass').value;
+      if(!name){ showAuthMsg('Vault name required'); return; }
+      if(!pass){ showAuthMsg('Master password required'); return; }
+      if(localStorage.getItem(vaultKey(name))){ showAuthMsg('Vault exists'); return; }
+      (async ()=>{
+        currentKdf = el('kdfSelect').value;
+        const enc = await (async ()=>{ const s = []; return await encryptVault(pass, s); })();
+        localStorage.setItem(vaultKey(name), enc);
+        localStorage.setItem(exportKey(name), enc);
+        localStorage.setItem(exportAtKey(name), new Date().toISOString());
+        listVaults();
+        hideModal();
+        resolve({ created: true });
+      })();
+    };
+    modalCancel.onclick = () => { hideModal(); resolve(null); };
+    showModalElement();
+  });
+};
+
+el('unlockBtn').onclick = async () => {
+  const selected = el('vaultSelect').value;
+  const pass = el('masterInput').value;
+  if(!selected){ showAuthMsg('Select a vault'); return; }
+  if(!pass){ showAuthMsg('Enter master password'); return; }
+  const enc = loadEncryptedFromStorage(selected);
+  if(!enc){ showAuthMsg('Vault not found'); listVaults(); return; }
+  try {
+    currentKdf = el('kdfSelect').value;
+    const dec = await decryptVault(pass, enc);
+    vault = Array.isArray(dec)? dec : [];
+    currentVaultName = selected;
+    currentMaster = pass;
+    unlocked = true;
+    el('authCard').style.display = 'none';
+    el('vaultControls').style.display = 'block';
+    el('entryCard').style.display = 'block';
+    el('listCard').style.display = 'block';
+    startInactivityCountdown();
+    updateUI();
+    showAuthMsg('');
+  } catch(e){
+    showAuthMsg('Unlock failed (wrong password or corrupted).');
+  }
+};
+
+/* ---------- SECURE LOCK: clear sensitive UI + memory ---------- */
+function clearSensitiveUI(){
+  // clear all inputs that might contain secrets
+  try {
+    el('masterInput').value = '';
+  } catch(e){}
+  try {
+    el('entryPassword').value = '';
+  } catch(e){}
+  try {
+    el('notes').value = '';
+  } catch(e){}
+  try {
+    el('importPaste').value = '';
+  } catch(e){}
+  try {
+    // clear modal inputs if visible
+    const modalInputs = modal.querySelectorAll('input[type="password"], input[type="text"], textarea');
+    modalInputs.forEach(i => i.value = '');
+  } catch(e){}
+
+  // clear any revealed passwords in the list (reset to bullets)
+  try {
+    document.querySelectorAll('.pwdSpan').forEach(s => { s.textContent = '••••••'; });
+    document.querySelectorAll('.showPwd').forEach(btn => { btn.textContent = '👁'; });
+  } catch(e){}
+
+  // clear edit state
+  try { delete el('saveEntryBtn').dataset.editId; } catch(e){}
+}
+
+el('lockBtn').onclick = () => { doLock('Locked by user'); };
+
+function doLock(text){
+  // Clear sensitive data from UI and memory immediately
+  clearSensitiveUI();
+
+  // clear master, in-memory vault, and flags
+  currentVaultName = null;
+  currentMaster = null;
+  vault = [];
+  unlocked = false;
+
+  // stop inactivity countdown
+  stopInactivityCountdown();
+
+  // hide unlocked UI but leave other UI unchanged
+  el('authCard').style.display = 'block';
+  el('vaultControls').style.display = 'none';
+  el('entryCard').style.display = 'none';
+  el('listCard').style.display = 'none';
+  el('importAreaWrap').style.display = 'none';
+
+  // show message
+  showAuthMsg(text || 'Locked.');
+
+  // reset inactivity chip
+  el('inactivityChip').textContent = 'Unlocked: No';
+  el('inactivityChip').style.background = 'transparent';
+
+  // refresh vault list
+  listVaults();
+}
+
+/* ---------- entries CRUD ---------- */
+el('saveEntryBtn').onclick = async () => {
+  const site = el('site').value.trim();
+  const username = el('username').value.trim();
+  const password = el('entryPassword').value;
+  const notes = el('notes').value.trim();
+  const tags = el('tags').value.trim();
+  if(!site || !username || !password){ showMsg('Site, username and password required'); return; }
+  const editId = el('saveEntryBtn').dataset.editId;
+  const now = new Date().toISOString();
+  if(editId){
+    const idx = vault.findIndex(x=>x.id===editId);
+    if(idx>=0){ vault[idx] = { ...vault[idx], site, username, password, notes, tags, updatedAt: now }; delete el('saveEntryBtn').dataset.editId; }
+  } else {
+    vault.push({ id: crypto.randomUUID(), site, username, password, notes, tags, createdAt: now, updatedAt: now });
+  }
+  el('site').value=''; el('username').value=''; el('entryPassword').value=''; el('notes').value=''; el('tags').value=''; el('pwFill').style.width='0%'; el('pwStrength').style.display='none';
+  await persistVault();
+  updateUI();
+  showMsg('Saved');
+};
+
+el('newEntryBtn').onclick = () => {
+  el('site').value=''; el('username').value=''; el('entryPassword').value=''; el('notes').value=''; el('tags').value=''; el('pwFill').style.width='0%'; el('pwStrength').style.display='none';
+  delete el('saveEntryBtn').dataset.editId;
+};
+
+el('genBtn').onclick = () => {
+  const length = 16;
+  const pool = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{};:,.<>?';
+  const arr = new Uint32Array(length);
+  crypto.getRandomValues(arr);
+  let out='';
+  for(let i=0;i<length;i++) out += pool[arr[i] % pool.length];
+  el('entryPassword').value = out;
+  evaluatePwStrength(out);
+};
+
+el('entryPassword').addEventListener('input',(e)=> evaluatePwStrength(e.target.value));
+
+function evaluatePwStrength(pw){
+  const wrap = el('pwStrength'); const fill = el('pwFill'); const txt = el('pwText');
+  if(!pw){ wrap.style.display='none'; fill.style.width='0%'; txt.textContent='—'; return; }
+  wrap.style.display='flex';
+  let score = 0;
+  if(pw.length>=8) score++; if(pw.length>=12) score++; if(/[A-Z]/.test(pw)&&/[a-z]/.test(pw)) score++; if(/\d/.test(pw)) score++; if(/[\W_]/.test(pw)) score++;
+  const pct = Math.min(100, Math.round((score/5)*100));
+  fill.style.width = pct+'%';
+  if(pct<40){ fill.style.background= 'var(--danger)'; txt.textContent='Weak'; }
+  else if(pct<70){ fill.style.background='var(--warn)'; txt.textContent='OK'; }
+  else { fill.style.background='var(--success)'; txt.textContent='Strong'; }
+}
+
+/* ---------- search / sort ---------- */
+el('searchInput').addEventListener('input', updateUI);
+el('sortSelect').addEventListener('change', updateUI);
+el('vaultSelect').addEventListener('change', updateLastExportInfo); // Ensures export timestamp updates on vault selection
+
+/* ---------- download / export ---------- */
+el('downloadBtn').onclick = () => {
+  if(!currentVaultName) return showAuthMsg('No vault unlocked');
+  const enc = loadLatestExport(currentVaultName) || loadEncryptedFromStorage(currentVaultName);
+  if(!enc) return showAuthMsg('No encrypted export found');
+  const blob = new Blob([enc], { type:'text/plain' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  const ts = formatTsFile(new Date()); const safe = currentVaultName.replace(/[^A-Za-z0-9_\-]/g,'_');
+  a.download = `${safe}_${ts}.vault`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+  showMsg('Downloaded latest export');
+};
+
+el('copyExportBtn').onclick = async () => {
+  if(!currentVaultName) return showAuthMsg('No vault unlocked');
+  const enc = loadLatestExport(currentVaultName) || loadEncryptedFromStorage(currentVaultName);
+  if(!enc) return showAuthMsg('No encrypted export found');
+  try { await navigator.clipboard.writeText(enc); showMsg('Encrypted export copied'); } catch(e){ showMsg('Copy failed'); }
+};
+
+/* ---------- import (modal) ---------- */
+el('openImportBtn').onclick = () => {
+  el('importAreaWrap').style.display = el('importAreaWrap').style.display === 'block' ? 'none' : 'block';
+};
+el('importFileBtn').onclick = () => el('importFileInput').click();
+el('importFileInput').onchange = async (ev) => {
+  const f = ev.target.files[0]; if(!f) return;
+  try {
+    const txt = await f.text();
+    el('importPaste').value = txt.trim();
+  } catch(e){ showAuthMsg('Failed to read file'); } finally { el('importFileInput').value=''; }
+};
+el('importPasteBtn').onclick = async () => {
+  const blob = el('importPaste').value.trim();
+  if(!blob) return showAuthMsg('Paste encrypted blob or select file');
+  const data = await showImportModal(blob);
+  if(!data) return;
+  const { targetName, importedPass, localPass } = data;
+  if(!targetName) return showAuthMsg('No target name provided');
+  try {
+    if(localStorage.getItem(vaultKey(targetName))){
+      const importedArr = await decryptVault(importedPass, blob);
+      const existingEnc = loadEncryptedFromStorage(targetName);
+      const existingArr = await decryptVault(localPass, existingEnc);
+      const merged = mergeVaults(existingArr, importedArr);
+      const prevKdf = currentKdf; currentKdf = currentKdf || 'argon2';
+      const newEnc = await encryptVault(localPass, merged);
+      currentKdf = prevKdf;
+      localStorage.setItem(vaultKey(targetName), newEnc);
+      localStorage.setItem(exportKey(targetName), newEnc);
+      localStorage.setItem(exportAtKey(targetName), new Date().toISOString());
+      if(currentVaultName === targetName && currentMaster === localPass){ vault = merged; updateUI(); }
+      listVaults();
+      showAuthMsg('Merged imported vault into ' + targetName);
+    } else {
+      await decryptVault(importedPass, blob);
+      localStorage.setItem(vaultKey(targetName), blob);
+      localStorage.setItem(exportKey(targetName), blob);
+      localStorage.setItem(exportAtKey(targetName), new Date().toISOString());
+      listVaults();
+      showAuthMsg('Imported vault saved as ' + targetName);
+    }
+    el('importPaste').value = ''; el('importAreaWrap').style.display='none';
+  } catch(e){
+    showAuthMsg('Import failed: '+ (e.message || e));
+  }
+};
+
+function showImportModal(blob){
+  return new Promise(resolve => {
+    modalTitle.textContent = 'Import vault (paste/file)';
+    modalBody.innerHTML = `
+      <label>Target vault name</label><input id="md_target" placeholder="Vault name (new or existing)"/>
+      <label>Password for imported vault</label><input id="md_importPass" type="password" placeholder="Pass for the FILE/PASTE"/>
+      <div id="md_localPassDiv" style="display:none"><label>Password for EXISTING local vault</label><input id="md_localPass" type="password" placeholder="Pass for LOCAL vault"/></div>
+    `;
+    const targetInput = el('md_target');
+    targetInput.oninput = () => {
+       if(localStorage.getItem(vaultKey(targetInput.value.trim()))) el('md_localPassDiv').style.display = 'block';
+       else el('md_localPassDiv').style.display = 'none';
+    };
+    modalOk.onclick = () => {
+       const t = targetInput.value.trim();
+       const ip = el('md_importPass').value;
+       const lp = el('md_localPass').value;
+       if(!t || !ip) return; 
+       hideModal(); resolve({ targetName: t, importedPass: ip, localPass: lp });
+    };
+    modalCancel.onclick = () => { hideModal(); resolve(null); };
+    showModalElement();
+  });
+}
+
+function mergeVaults(local, imported){
+  const map = new Map();
+  local.forEach(i => map.set(i.id, i));
+  imported.forEach(i => {
+    if(!map.has(i.id)) map.set(i.id, i);
+    else {
+      const existing = map.get(i.id);
+      if(new Date(i.updatedAt) > new Date(existing.updatedAt)) map.set(i.id, i);
+    }
+  });
+  return Array.from(map.values());
+}
+
+/* ---------- modal helpers ---------- */
+function showModalElement(){ modal.style.display='flex'; }
+function hideModal(){ modal.style.display='none'; }
+function showModal(title, promiseLogic){ return promiseLogic; } // reusing logic inside specific funcs
+function showConfirmModal(title, text){
+  return new Promise(resolve => {
+    modalTitle.textContent = title;
+    modalBody.innerHTML = `<div style="line-height:1.5">${escapeHtml(text)}</div>`;
+    modalOk.onclick = () => { hideModal(); resolve(true); };
+    modalCancel.onclick = () => { hideModal(); resolve(false); };
+    showModalElement();
+  });
+}
+
+/* ---------- undo toast ---------- */
+function showUndoToast(msg, undoCallback, timeout=5000){
+  toastHost.innerHTML = `<div class="toast"><span>${msg}</span><button id="undoBtn">Undo</button></div>`;
+  const t = setTimeout(()=>{ toastHost.innerHTML=''; }, timeout);
+  el('undoBtn').onclick = () => { clearTimeout(t); toastHost.innerHTML=''; undoCallback(); };
+}
+
+/* ---------- inactivity timer ---------- */
+function startInactivityCountdown(){
+  stopInactivityCountdown();
+  inactivityRemaining = INACTIVITY_SECONDS;
+  resetTimer();
+  document.onmousemove = resetTimer;
+  document.onkeypress = resetTimer;
+  inactivityInterval = setInterval(() => {
+    if(inactivityRemaining > 0) inactivityRemaining--;
+    else doLock('Locked due to inactivity');
+  }, 1000);
+}
+function stopInactivityCountdown(){
+  document.onmousemove = null; document.onkeypress = null;
+  if(inactivityInterval) clearInterval(inactivityInterval);
+  inactivityRemaining = 0;
+}
+function resetTimer(){
+  inactivityRemaining = INACTIVITY_SECONDS;
+  if(unlocked){
+     el('inactivityChip').textContent = 'Unlocked';
+     el('inactivityChip').style.background = '#dcfce7'; 
+     el('inactivityChip').style.color = '#166534'; 
+     el('inactivityChip').style.borderColor = '#bbf7d0'; 
+  }
+}
+
+/* ---------- PWA Installation Script ---------- */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => {
+        console.log('Service Worker registered! Scope:', reg.scope);
+      })
+      .catch(err => {
+        console.log('Service Worker registration failed:', err);
+      });
+  });
+}
+/* ---------- init ---------- */
+listVaults();
+
+</script>
+</body>
+</html>

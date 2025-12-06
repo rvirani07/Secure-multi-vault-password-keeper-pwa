@@ -1,0 +1,21 @@
+{
+  "name": "Secure Vault Keeper",
+  "short_name": "Vault Keeper",
+  "description": "A secure, local-storage based password keeper.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#0b99a5",
+  "icons": [
+    {
+      "src": "icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
