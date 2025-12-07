@@ -1,6 +1,6 @@
 {
-  "name": "Secure Vault Keeper",
-  "short_name": "Vault Keeper",
+  "name": "Secure multi vault password keeper",
+  "short_name": "Password Keeper",
   "description": "A secure, local-storage based password keeper.",
   "start_url": "./index.html",
   "display": "standalone",
@@ -18,4 +18,5 @@
       "type": "image/png"
     }
   ]
+
 }
